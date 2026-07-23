@@ -88,15 +88,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Put cl.exe/link.exe on PATH ourselves instead of relying on CMake's
+      # "Visual Studio" generator auto-detection, which breaks whenever the
+      # windows-latest runner image rolls to a new VS layout.
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      # Ninja is preinstalled on GitHub's windows runner images.
+
       # Static MSVC runtime so users don't need the VC++ Redistributable.
       - name: Configure
         run: >
-          cmake -S . -B build
-          -G "Visual Studio 17 2022" -A x64
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
 
       - name: Build
-        run: cmake --build build --config Release --target AS1Next_All --parallel 3
+        run: cmake --build build --target AS1Next_All --parallel 3
 
       - name: Package
         shell: pwsh

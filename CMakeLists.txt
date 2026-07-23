@@ -12,6 +12,18 @@ if(MSVC)
     add_compile_options(/utf-8)
 endif()
 
+# C++26 removed std::wstring_convert / std::codecvt_utf8_utf16 (P2871), which the
+# bundled Steinberg VST3 SDK still uses. libstdc++ (Linux) keeps them as
+# deprecated, but the newer libc++ shipping with recent Apple/LLVM clang deletes
+# them outright, so the VST3 target fails to compile on macOS. libc++'s
+# escape-hatch macros bring the removed pieces back; they are libc++-specific and
+# ignored by other standard libraries, so it is safe to define them unconditionally.
+add_compile_definitions(
+    _LIBCPP_ENABLE_CXX26_REMOVED_FEATURES
+    _LIBCPP_ENABLE_CXX26_REMOVED_CODECVT
+    _LIBCPP_ENABLE_CXX26_REMOVED_WSTRING_CONVERT
+)
+
 include(FetchContent)
 FetchContent_Declare(
     JUCE
