@@ -15,6 +15,31 @@
 namespace as1
 {
 
+// libc++ (macOS) still lacks std::atomic<std::shared_ptr>; fall back to a
+// spinlock-guarded pointer there. The audio thread only takes the lock for a
+// pointer copy at note-on, so contention is negligible.
+#if defined(__cpp_lib_atomic_shared_ptr)
+using AtomicPresetPtr = std::atomic<std::shared_ptr<const RasPreset>>;
+#else
+class AtomicPresetPtr
+{
+public:
+    std::shared_ptr<const RasPreset> load() const
+    {
+        const juce::SpinLock::ScopedLockType sl(lock);
+        return ptr;
+    }
+    void store(std::shared_ptr<const RasPreset> newPtr)
+    {
+        const juce::SpinLock::ScopedLockType sl(lock);
+        ptr = std::move(newPtr);
+    }
+private:
+    mutable juce::SpinLock lock;
+    std::shared_ptr<const RasPreset> ptr;
+};
+#endif
+
 class AS1AudioProcessor : public juce::AudioProcessor
 {
 public:
@@ -77,7 +102,7 @@ private:
     // Last note held in mono mode (-1 = none), for last-note-priority stealing.
     int monoLastNote = -1;
 
-    std::atomic<std::shared_ptr<const RasPreset>> currentPreset { nullptr };
+    AtomicPresetPtr currentPreset {};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AS1AudioProcessor)
 };

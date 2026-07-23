@@ -6,12 +6,32 @@
 namespace as1
 {
 
-namespace { constexpr int starHitWidth = 30; }
+namespace
+{
+    constexpr int starHitWidth = 30;
+    constexpr int starDrawSize = 15;
+
+    // Downscale a large source icon to UI size by repeated halving, then a
+    // final high-quality resample. A direct 512 -> ~15 rescale (even at
+    // "high" quality) samples so sparsely it aliases into ragged edges;
+    // halving keeps every step within the filter's footprint. Rendered at 2x
+    // the draw size so the icon also stays crisp on hi-DPI displays.
+    juce::Image downscaleForUi(juce::Image img, int targetSize)
+    {
+        if (!img.isValid())
+            return img;
+        while (img.getWidth() >= targetSize * 4)
+            img = img.rescaled(img.getWidth() / 2, img.getHeight() / 2, juce::Graphics::highResamplingQuality);
+        return img.rescaled(targetSize, targetSize, juce::Graphics::highResamplingQuality);
+    }
+}
 
 PresetBrowser::PresetBrowser(AS1AudioProcessor& ownerProcessor) : processor(ownerProcessor)
 {
-    starOn = juce::ImageFileFormat::loadFrom(BinaryData::favoriteon_png, static_cast<size_t>(BinaryData::favoriteon_pngSize));
-    starOff = juce::ImageFileFormat::loadFrom(BinaryData::favoriteoff_png, static_cast<size_t>(BinaryData::favoriteoff_pngSize));
+    starOn = downscaleForUi(juce::ImageFileFormat::loadFrom(BinaryData::favoriteon_png, static_cast<size_t>(BinaryData::favoriteon_pngSize)),
+                             starDrawSize * 2);
+    starOff = downscaleForUi(juce::ImageFileFormat::loadFrom(BinaryData::favoriteoff_png, static_cast<size_t>(BinaryData::favoriteoff_pngSize)),
+                              starDrawSize * 2);
 
     presetNameLabel.setFont(juce::Font(juce::FontOptions(18.0f)).boldened());
     presetNameLabel.setColour(juce::Label::textColourId, AS1LookAndFeel::palette.text);
@@ -117,10 +137,11 @@ void PresetBrowser::paintListBoxItem(int rowNumber, juce::Graphics& g, int width
     const juce::Image& star = fav ? starOn : starOff;
     if (star.isValid())
     {
-        int s = 15;
+        int s = starDrawSize;
         int sx = width - starHitWidth + (starHitWidth - s) / 2;
         int sy = (height - s) / 2;
         g.setOpacity(fav ? 1.0f : 0.35f);
+        g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
         g.drawImage(star, sx, sy, s, s, 0, 0, star.getWidth(), star.getHeight());
         g.setOpacity(1.0f);
     }

@@ -22,6 +22,12 @@ AS1AudioProcessorEditor::AS1AudioProcessorEditor(AS1AudioProcessor& p)
       keyboard(p.keyboardState, juce::MidiKeyboardComponent::horizontalKeyboard),
       modMatrixEditor(p)
 {
+    // Also install as the process-default L&F: Font -> Typeface resolution for
+    // plain `juce::Font(FontOptions(...))` goes through the *default*
+    // LookAndFeel's getTypefaceForFont, not the component one — without this
+    // the embedded Nunito never applies and Windows falls back to system fonts
+    // (Times New Roman under Wine, which has no Verdana).
+    juce::LookAndFeel::setDefaultLookAndFeel(&lookAndFeel);
     setLookAndFeel(&lookAndFeel);
 
     addAndMakeVisible(backgroundArt);
@@ -179,6 +185,8 @@ AS1AudioProcessorEditor::~AS1AudioProcessorEditor()
 {
     stopAuditionNote();
     setLookAndFeel(nullptr);
+    if (&juce::LookAndFeel::getDefaultLookAndFeel() == &lookAndFeel)
+        juce::LookAndFeel::setDefaultLookAndFeel(nullptr);
 }
 
 bool AS1AudioProcessorEditor::keyPressed(const juce::KeyPress& key)

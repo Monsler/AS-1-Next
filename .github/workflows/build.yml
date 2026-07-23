@@ -1,0 +1,112 @@
+# Builds Release VST3s for macOS (universal arm64 + x86_64) and Windows x64,
+# uploads them as artifacts on every push/PR, and attaches the zips to a
+# GitHub Release when a v* tag is pushed.
+name: Build
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  macos:
+    name: macOS VST3 (universal)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15
+
+      - name: Build
+        run: cmake --build build --target AS1Next_VST3 --parallel 3
+
+      # Without at least an ad-hoc signature, macOS refuses to load the
+      # binary at all on Apple Silicon.
+      - name: Ad-hoc codesign
+        run: codesign --force --deep -s - "build/AS1Next_artefacts/Release/VST3/AS-1 Next.vst3"
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp -R "build/AS1Next_artefacts/Release/VST3/AS-1 Next.vst3" dist/
+          cp -R RetroAS1 dist/RetroAS1
+          cat > dist/README.txt <<'EOF'
+          AS-1 Next — macOS VST3 (universal: Apple Silicon + Intel)
+
+          1. Copy "AS-1 Next.vst3" to ~/Library/Audio/Plug-Ins/VST3/
+          2. Copy the "RetroAS1" preset folder next to it
+             (~/Library/Audio/Plug-Ins/VST3/RetroAS1/)
+             or to ~/Documents/AS1Next/RetroAS1/
+          3. The build is unsigned (ad-hoc); if macOS quarantines it, run:
+             xattr -cr ~/Library/Audio/Plug-Ins/VST3/"AS-1 Next.vst3"
+          EOF
+          cd dist && zip -r "../AS-1-Next-macOS-VST3.zip" .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AS-1-Next-macOS-VST3
+          path: AS-1-Next-macOS-VST3.zip
+
+  windows:
+    name: Windows x64 VST3
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Static MSVC runtime so users don't need the VC++ Redistributable.
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -G "Visual Studio 17 2022" -A x64
+          -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+
+      - name: Build
+        run: cmake --build build --config Release --target AS1Next_VST3 --parallel 3
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item -Recurse "build/AS1Next_artefacts/Release/VST3/AS-1 Next.vst3" dist/
+          Copy-Item -Recurse RetroAS1 dist/RetroAS1
+          Set-Content dist/README.txt @"
+          AS-1 Next — Windows x64 VST3
+
+          1. Copy the "AS-1 Next.vst3" folder to C:\Program Files\Common Files\VST3\
+          2. Copy the "RetroAS1" preset folder next to it
+             (C:\Program Files\Common Files\VST3\RetroAS1\)
+             or to Documents\AS1Next\RetroAS1\ or %APPDATA%\AS1Next\RetroAS1\
+          No VC++ Redistributable needed (statically linked runtime).
+          "@
+          Compress-Archive -Path dist/* -DestinationPath AS-1-Next-win64-VST3.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AS-1-Next-win64-VST3
+          path: AS-1-Next-win64-VST3.zip
+
+  release:
+    name: GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            AS-1-Next-macOS-VST3.zip
+            AS-1-Next-win64-VST3.zip
+          generate_release_notes: true

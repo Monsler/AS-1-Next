@@ -19,7 +19,34 @@ void PresetManager::scanPresetFolder()
     // AS1_PRESET_DIR is a compile-time path that may contain non-ASCII bytes
     // (e.g. a Cyrillic directory name) — juce::String's `const char*` ctor
     // assumes ASCII and asserts on those, so decode it as UTF-8 explicitly.
+    //
+    // That baked-in path only exists on the build machine, so a distributed
+    // build (e.g. the Windows VST3) falls back to a "RetroAS1" folder next to
+    // the plugin binary / bundle, then to per-user locations.
     juce::File dir(juce::String(juce::CharPointer_UTF8(AS1_PRESET_DIR)));
+    if (!dir.isDirectory())
+    {
+        auto pluginFile = juce::File::getSpecialLocation(juce::File::currentApplicationFile);
+        juce::Array<juce::File> candidates;
+        // Next to the .vst3 bundle (walk up out of <name>.vst3/Contents/<arch>/).
+        for (auto f = pluginFile.getParentDirectory(); f != juce::File() && candidates.size() < 5;
+             f = f.getParentDirectory())
+        {
+            candidates.add(f.getChildFile("RetroAS1"));
+            if (f.getFileName().endsWithIgnoreCase(".vst3"))
+            {
+                candidates.add(f.getSiblingFile("RetroAS1"));
+                break;
+            }
+        }
+        candidates.add(juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+                           .getChildFile("AS1Next").getChildFile("RetroAS1"));
+        candidates.add(juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                           .getChildFile("AS1Next").getChildFile("RetroAS1"));
+
+        for (const auto& c : candidates)
+            if (c.isDirectory()) { dir = c; break; }
+    }
     if (!dir.isDirectory())
         return;
 

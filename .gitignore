@@ -1,1 +1,4 @@
 /build
+/build-win
+/dist
+/.xwin-cache
