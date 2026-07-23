@@ -28,6 +28,12 @@ void PresetManager::scanPresetFolder()
     {
         auto pluginFile = juce::File::getSpecialLocation(juce::File::currentApplicationFile);
         juce::Array<juce::File> candidates;
+        // Bundled inside the macOS app / plug-in bundle so the distributed build
+        // is fully self-contained (nothing for the user to copy): the packaging
+        // step drops RetroAS1 into <App>.app/Contents/Resources or
+        // <Plugin>.vst3/Contents/Resources. currentApplicationFile returns the
+        // bundle itself on macOS, so this resolves for both.
+        candidates.add(pluginFile.getChildFile("Contents/Resources/RetroAS1"));
         // Next to the .vst3 bundle (walk up out of <name>.vst3/Contents/<arch>/).
         for (auto f = pluginFile.getParentDirectory(); f != juce::File() && candidates.size() < 5;
              f = f.getParentDirectory())
@@ -144,8 +150,10 @@ void PresetManager::applyPreset(const RasPreset& preset)
 
     if (!preset.filters.empty())
     {
-        setNormalized(apvts, filterCutoff, static_cast<float>(std::clamp(preset.filters[0].cutoff, 0.0, 100.0)));
-        setNormalized(apvts, filterResonance, static_cast<float>(std::clamp(preset.filters[0].resonance, 0.0, 100.0)));
+        // FilterConfig cutoff/resonance are now 0..1 knob values; the APVTS
+        // params are 0..100 percentages.
+        setNormalized(apvts, filterCutoff, static_cast<float>(std::clamp(preset.filters[0].cutoff, 0.0, 1.0) * 100.0));
+        setNormalized(apvts, filterResonance, static_cast<float>(std::clamp(preset.filters[0].resonance, 0.0, 1.0) * 100.0));
         int typeIdx = std::clamp(static_cast<int>(preset.filters[0].type), 0, filterTypeChoices.size() - 1);
         setNormalized(apvts, filterType, static_cast<float>(typeIdx));
     }

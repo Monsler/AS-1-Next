@@ -86,6 +86,13 @@ public:
     std::shared_ptr<const RasPreset> getPresetSnapshot() const { return currentPreset.load(); }
     void setPresetSnapshot(std::shared_ptr<const RasPreset> p) { currentPreset.store(std::move(p)); }
 
+    // Live performance-controller state, updated from incoming MIDI at the top of
+    // processBlock and read by each voice for the `.ras` built-in modulation
+    // sources (Controller A = mod wheel, Mono Aftertouch). Many factory presets
+    // route the mod wheel or aftertouch to volume / cutoff / a modulator's depth.
+    float getModWheel() const { return modWheel.load(); }
+    float getAftertouch() const { return aftertouch.load(); }
+
 private:
     static constexpr int numVoices = 16;
 
@@ -103,6 +110,13 @@ private:
     int monoLastNote = -1;
 
     AtomicPresetPtr currentPreset {};
+
+    std::atomic<float> modWheel { 0.0f };
+    std::atomic<float> aftertouch { 0.0f };
+
+    // Output DC-blocking one-pole highpass state (per channel).
+    float dcX1[2] { 0.0f, 0.0f };
+    float dcY1[2] { 0.0f, 0.0f };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AS1AudioProcessor)
 };

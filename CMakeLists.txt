@@ -129,3 +129,39 @@ target_link_libraries(AS1Snapshot PRIVATE
     juce::juce_gui_basics
     juce::juce_recommended_config_flags
 )
+
+# Headless offline audio-render harness (Tools/RenderMain.cpp): plays each
+# preset and reports level/brightness so DSP/parser regressions are catchable
+# without a DAW or speakers.
+juce_add_console_app(AS1Render PRODUCT_NAME "AS1Render")
+set_target_properties(AS1Render PROPERTIES WIN32_EXECUTABLE FALSE)
+target_sources(AS1Render PRIVATE
+    Tools/RenderMain.cpp
+    Source/PluginProcessor.cpp
+    Source/PluginEditor.cpp
+    Source/presets/RasParser.cpp
+    Source/presets/PresetManager.cpp
+    Source/dsp/SynthVoice.cpp
+    Source/gui/AS1LookAndFeel.cpp
+    Source/gui/BackgroundArt.cpp
+    Source/gui/PresetBrowser.cpp
+    Source/gui/ModMatrixEditor.cpp
+)
+target_include_directories(AS1Render PRIVATE Source)
+target_compile_definitions(AS1Render PRIVATE
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+    JUCE_DISPLAY_SPLASH_SCREEN=0
+    JUCE_MODAL_LOOPS_PERMITTED=1
+    JucePlugin_Name="AS-1 Next"
+    AS1_PRESET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/RetroAS1"
+)
+target_link_libraries(AS1Render PRIVATE
+    AS1NextAssets
+    juce::juce_audio_utils
+    juce::juce_audio_formats
+    juce::juce_dsp
+    juce::juce_audio_processors
+    juce::juce_gui_basics
+    juce::juce_recommended_config_flags
+)

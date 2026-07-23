@@ -44,34 +44,49 @@ struct ModSource
     double envAttack = 0.0, envDecay = 0.0, envSustain = 0.0, envSustainDecay = 0.0, envRelease = 0.0;
 };
 
-// Where a routing points. Decoded from the `rout` chunk's destination code:
-//   0            -> Pitch (all oscillators, in octaves)
+// Where a routing points. Decoded from the `rout` chunk's destination code
+// (matching the editor's routing-destination dropdown in order):
+//   0            -> Pitch (all oscillators)
 //   1            -> Volume (master voice amplitude)
-//   2            -> Pan
-//   100/105/110  -> per-oscillator frequency (osc block base + 0)
-//   +2/+3        -> per-oscillator pulse width (symmetry / PWM)
-//   +4           -> per-oscillator level (that oscillator's own VCA)
-//   200..209     -> filter cutoff (200/205) or resonance (201)
+//   100/105/110  -> oscillator block: +0 Frequency, +1 Random, +2 Symmetry
+//                   (PWM), +3 FM Amount, +4 Volume (per-osc VCA)
+//   200..204     -> Filter 1: Cutoff, Spread, CM Amount, Resonance, Overdrive
+//   205..209     -> Filter 2: same five, uses filterIndex
+//   300 + 4*i+s  -> output scaler of modulator i (how "mod wheel controls
+//                   vibrato depth" is expressed in the factory bank)
+//   400/401      -> Global effect 1/2 send
 enum class ModDest
 {
     None,
     Pitch,
     Volume,
     Pan,
-    OscFreq,   // uses oscIndex
-    OscPulse,  // uses oscIndex (symmetry / PWM)
-    OscLevel,  // uses oscIndex (per-oscillator VCA)
-    FilterCutoff,
-    FilterResonance,
+    OscFreq,      // uses oscIndex
+    OscPulse,     // uses oscIndex (symmetry / PWM)
+    OscFMAmount,  // uses oscIndex
+    OscLevel,     // uses oscIndex (per-oscillator VCA)
+    FilterCutoff,     // uses filterIndex
+    FilterSpread,     // uses filterIndex
+    FilterCM,         // uses filterIndex
+    FilterResonance,  // uses filterIndex
+    FilterOverdrive,  // uses filterIndex
+    ModScale,     // uses modIndex: scales modulator modIndex's output
+    Send,
 };
 
-// A single routing: source index (into ModMatrix::sources) -> destination ×
-// amount. Envelopes and LFOs are both valid sources.
+// A single routing. `sourceIndex` >= 0 indexes ModMatrix::sources (envelopes /
+// LFOs, file source code 8+); `builtinSource` >= 0 instead selects one of the
+// hardware's fixed performance sources (file source codes 0..7): 0 Note,
+// 1 Velocity, 2 Mono Aftertouch, 3 Poly Aftertouch, 4..7 Controller A..D
+// (Controller A = mod wheel).
 struct ModRouting
 {
-    int sourceIndex = 0;
+    int sourceIndex = -1;
+    int builtinSource = -1;
     ModDest dest = ModDest::None;
     int oscIndex = 0;             // 0/1/2 = osc A/B/C
+    int filterIndex = 0;          // 0/1 = filter 1/2
+    int modIndex = 0;             // target modulator for ModScale
     double amount = 0.0;
 };
 

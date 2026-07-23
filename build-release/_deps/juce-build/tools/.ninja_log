@@ -1,0 +1,5 @@
+# ninja log v7
+1	34	1784817066288345373	/home/monsler/Документы/AS-1 Next/build-release/_deps/juce-build/tools/CMakeFiles/cmake.verify_globs	e1c7115fdd99b2ff
+34	6328	1784817066319848941	extras/Build/juceaide/CMakeFiles/juceaide.dir/Main.cpp.o	dcbce5edac90f9d0
+34	6554	1784817066321073437	extras/Build/juceaide/CMakeFiles/juceaide.dir/__/juce_build_tools/juce_build_tools.cpp.o	fb6325f2e764639b
+6554	7230	1784817072839889800	extras/Build/juceaide/CMakeFiles/juceaide.dir/__/__/__/modules/juce_graphics/juce_graphics_Sheenbidi.c.o	35c8fde975624f61

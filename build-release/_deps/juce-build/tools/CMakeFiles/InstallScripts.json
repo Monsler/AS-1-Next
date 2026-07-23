@@ -1,0 +1,10 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/monsler/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/AS-1 Next/build-release/_deps/juce-build/tools/cmake_install.cmake",
+		"/home/monsler/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/AS-1 Next/build-release/_deps/juce-build/tools/modules/cmake_install.cmake",
+		"/home/monsler/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/AS-1 Next/build-release/_deps/juce-build/tools/extras/Build/cmake_install.cmake",
+		"/home/monsler/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/AS-1 Next/build-release/_deps/juce-build/tools/extras/Build/juceaide/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

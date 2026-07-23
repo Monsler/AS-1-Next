@@ -3,6 +3,8 @@
 #include "dsp/SynthVoice.h"
 #include "dsp/SynthSound.h"
 
+#include <cmath>
+
 namespace as1
 {
 
@@ -47,6 +49,18 @@ void AS1AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
     buffer.clear();
 
     keyboardState.processNextMidiBuffer(midiMessages, 0, buffer.getNumSamples(), true);
+
+    // Track live mod wheel (CC1) and channel aftertouch so the voices' built-in
+    // `.ras` modulation sources (Controller A, Mono Aftertouch) follow the
+    // performance. Last value in the block wins.
+    for (const auto meta : midiMessages)
+    {
+        auto m = meta.getMessage();
+        if (m.isController() && m.getControllerNumber() == 1)
+            modWheel.store(static_cast<float>(m.getControllerValue()) / 127.0f);
+        else if (m.isChannelPressure())
+            aftertouch.store(static_cast<float>(m.getChannelPressureValue()) / 127.0f);
+    }
 
     // Monophonic mode: enforce last-note priority by turning off the previously
     // held note just before each new note-on, so only one note ever sounds.
@@ -112,8 +126,18 @@ void AS1AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
     {
         auto& delay = delayEffects[static_cast<size_t>(ch % static_cast<int>(delayEffects.size()))];
         auto* data = buffer.getWritePointer(ch);
+        int dci = ch % 2;
         for (int i = 0; i < numSamples; ++i)
-            data[i] = delay.process(data[i], delayOn, delayTimeMs, delayFeedback, delayMix);
+        {
+            float s = delay.process(data[i], delayOn, delayTimeMs, delayFeedback, delayMix);
+            // DC-blocking one-pole highpass (~10 Hz): the analog original is
+            // AC-coupled, so subsonic offset from asymmetric pulses / filter
+            // transients never reaches the output.
+            float y = s - dcX1[dci] + 0.9995f * dcY1[dci];
+            dcX1[dci] = s;
+            dcY1[dci] = y;
+            data[i] = y;
+        }
     }
 
     // Reverb "global effect": the room-type selector supplies the base
@@ -141,7 +165,25 @@ void AS1AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
             reverb.processMono(buffer.getWritePointer(0), numSamples);
     }
 
-    buffer.applyGain(masterGain);
+    // Master gain + soft limiter. Several factory patches (detuned multi-saw
+    // ensembles, high-resonance sweeps) momentarily sum past ±1.0; a hard clip
+    // there turns the tone harsh and noise-like ("wind"). A soft-knee tanh
+    // saturator is transparent below the knee and gently rounds peaks above it,
+    // so nothing reaches the interface railed.
+    constexpr float knee = 0.8f;
+    for (int ch = 0; ch < numChannels; ++ch)
+    {
+        auto* data = buffer.getWritePointer(ch);
+        for (int i = 0; i < numSamples; ++i)
+        {
+            float x = data[i] * masterGain;
+            if (x > knee)
+                x = knee + (1.0f - knee) * std::tanh((x - knee) / (1.0f - knee));
+            else if (x < -knee)
+                x = -knee + (1.0f - knee) * std::tanh((x + knee) / (1.0f - knee));
+            data[i] = x;
+        }
+    }
 }
 
 juce::AudioProcessorEditor* AS1AudioProcessor::createEditor()

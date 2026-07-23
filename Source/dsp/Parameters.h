@@ -75,8 +75,14 @@ namespace as1
 
 inline const juce::StringArray waveformChoices { "Saw", "Triangle", "Square", "Sine", "Noise" };
 
-// Order matches the FilterType enum in RasPreset.h.
-inline const juce::StringArray filterTypeChoices { "LP 2-Pole", "LP 4-Pole", "BP 4-Pole", "HP 4-Pole" };
+// Order matches the FilterType enum in RasPreset.h (== the `filt` byte-7 code),
+// which is the Retro AS-1 Editor's own filter-type dropdown.
+inline const juce::StringArray filterTypeChoices {
+    "LP 1-Pole", "LP 2-Pole", "LP 4-Pole Res",
+    "HP 1-Pole", "HP 2-Pole", "HP 4-Pole Res",
+    "AP 1-Pole", "AP 2-Pole", "AP 4-Pole",
+    "SV LP", "SV BP", "SV BR", "SV HP"
+};
 
 inline const juce::StringArray voiceModeChoices { "Poly", "Mono" };
 

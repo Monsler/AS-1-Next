@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <map>
@@ -138,16 +140,13 @@ static as1::Waveform waveformFromCode(uint8_t code)
     }
 }
 
+// filt byte 7 is a direct index into the editor's filter-type dropdown, which
+// the FilterType enum mirrors 1:1 (0 "1 Pole LP" .. 12 "State Variable HP").
 static as1::FilterType filterTypeFromCode(uint8_t code)
 {
-    switch (code)
-    {
-        case 0: case 1: return as1::FilterType::Lowpass2Pole;
-        case 2: case 9: return as1::FilterType::Lowpass4Pole;
-        case 10: return as1::FilterType::Bandpass4Pole;
-        case 12: return as1::FilterType::Highpass4Pole;
-        default: return as1::FilterType::Unknown;
-    }
+    if (code <= 12)
+        return static_cast<as1::FilterType>(code);
+    return as1::FilterType::Unknown;
 }
 
 static double roundN(double v, int ndigits)
@@ -202,13 +201,17 @@ static as1::LfoWaveform lfoWaveformFromCode(uint8_t code)
     }
 }
 
-// Decode a `rout` destination code into a runtime modulation target. Oscillator
-// blocks are 100 (osc A), 105 (osc B), 110 (osc C) with sub-offsets 0 = freq,
-// 2/3 = pulse width, 4 = level; osc C folds onto osc B (the engine has two
-// oscillators). Filter block is 200 (cutoff) / 201 (resonance) / 205 (cutoff).
-static as1::ModDest decodeDest(int d, int& oscIndex)
+// Decode a `rout` destination code into a runtime modulation target, matching
+// the editor's routing-destination dropdown order. Oscillator blocks are 100
+// (osc A), 105 (osc B), 110 (osc C) with sub-offsets Frequency/Random/Symmetry/
+// FM Amount/Volume; filter blocks are 200 (filter 1) and 205 (filter 2) with
+// sub-offsets Cutoff/Spread/CM Amount/Resonance/Overdrive; 300 + 4*i + s
+// targets modulator i's output scaler; 400/401 are the global effect sends.
+static as1::ModDest decodeDest(int d, int& oscIndex, int& filterIndex, int& modIndex)
 {
     oscIndex = 0;
+    filterIndex = 0;
+    modIndex = 0;
     if (d == 0)   return as1::ModDest::Pitch;
     if (d == 1)   return as1::ModDest::Volume;
     if (d == 2)   return as1::ModDest::Pan;
@@ -217,12 +220,39 @@ static as1::ModDest decodeDest(int d, int& oscIndex)
         int block = (d - 100) / 5; // 0,1,2 = osc A/B/C
         int sub = (d - 100) % 5;
         oscIndex = std::min(block, 2);
-        if (sub <= 1) return as1::ModDest::OscFreq;
-        if (sub <= 3) return as1::ModDest::OscPulse;
-        return as1::ModDest::OscLevel;
+        switch (sub)
+        {
+            case 0:  return as1::ModDest::OscFreq;
+            case 1:  return as1::ModDest::None;      // Random — not modelled
+            case 2:  return as1::ModDest::OscPulse;  // Symmetry (PWM)
+            case 3:  return as1::ModDest::OscFMAmount;
+            default: return as1::ModDest::OscLevel;  // Volume
+        }
     }
     if (d >= 200 && d < 210)
-        return d == 201 ? as1::ModDest::FilterResonance : as1::ModDest::FilterCutoff;
+    {
+        filterIndex = (d - 200) / 5;
+        switch ((d - 200) % 5)
+        {
+            case 0:  return as1::ModDest::FilterCutoff;
+            case 1:  return as1::ModDest::FilterSpread;
+            case 2:  return as1::ModDest::FilterCM;
+            case 3:  return as1::ModDest::FilterResonance;
+            default: return as1::ModDest::FilterOverdrive;
+        }
+    }
+    // 300..399 = "Amount" destinations: this routing modulates the DEPTH of
+    // modulator (d-300)/4 (the editor's "mod wheel controls vibrato depth").
+    // A modulator so targeted is GATED by this control — off at rest, opened by
+    // it — which is essential for presets like Band Pass Lead whose LFO→pitch
+    // depth is large but meant to sit silent until the mod wheel is raised.
+    if (d >= 300 && d < 400)
+    {
+        modIndex = (d - 300) / 4;
+        return as1::ModDest::ModScale;
+    }
+    if (d >= 400 && d < 410)
+        return as1::ModDest::Send;
     return as1::ModDest::None;
 }
 
@@ -268,11 +298,15 @@ RasPreset RasParser::parseBytes(const std::vector<uint8_t>& data, const std::str
         // leaving only noise/other oscillators audible (the 909 kick's "hiss").
         OscillatorConfig osc;
         osc.enabled = cd[4] != 0;
+        osc.keyTrack = cd[5] != 0;
         osc.waveform = waveformFromCode(cd[7]);
+        osc.syncSource = readU16BE(cd, 8);   // AnalogAudioSource: hard-sync master
+        osc.fmSource = readU16BE(cd, 10);    // AnalogAudioSource: linear FM source
         osc.coarseTune = readI16BE(cd, 12);
         osc.fineTune = std::round(readF64BE(cd, 14) * 100.0);
         double rawSym = std::clamp(readF64BE(cd, 30), -1.0, 1.0); // 0 = square
         osc.symmetry = std::round((0.5 + 0.5 * rawSym) * 100.0);  // -> 0..100 duty
+        osc.fmAmount = std::clamp(readF64BE(cd, 38), 0.0, 1.0);
         osc.volume = std::clamp(readF64BE(cd, 46), 0.0, 1.0);
         preset.oscillators.push_back(osc);
     }
@@ -289,9 +323,22 @@ RasPreset RasParser::parseBytes(const std::vector<uint8_t>& data, const std::str
         FilterConfig filt;
         filt.enabled = true;
         filt.type = filterTypeFromCode(cd[7]);
-        filt.polyModAmount = std::round(readF64BE(cd, 30) * 100.0);
-        filt.cutoff = std::round(readF64BE(cd, 38) * 100.0);
-        filt.resonance = std::round(readF64BE(cd, 46) * 100.0);
+        // Filter doubles (verified via RetroLib.dll getter RVAs -> member
+        // offsets): Cutoff@14, Spread@22, CM Amt@30, Resonance@38, Overdrive@46.
+        // (The old port read cutoff from @38 = Resonance and resonance from
+        // @46 = Overdrive, so every filtered preset was mistuned.)
+        filt.cutoff = std::clamp(readF64BE(cd, 14), 0.0, 1.0);
+        filt.spread = std::clamp(readF64BE(cd, 22), 0.0, 1.0);
+        filt.cmAmount = std::clamp(readF64BE(cd, 30), -1.0, 1.0);
+        filt.resonance = std::clamp(readF64BE(cd, 38), 0.0, 1.0);
+        filt.overdrive = std::clamp(readF64BE(cd, 46), 0.0, 1.0);
+        // Bytes 8-9 = CM audio source; bytes 10-12 select which oscillators feed
+        // this filter; byte 13 chains in the other filter's output (serial).
+        filt.cmSource = readU16BE(cd, 8);
+        filt.inputOsc[0] = cd[10] != 0;
+        filt.inputOsc[1] = cd[11] != 0;
+        filt.inputOsc[2] = cd[12] != 0;
+        filt.inputOtherFilter = cd[13] != 0;
         preset.filters.push_back(filt);
     }
 
@@ -336,6 +383,10 @@ RasPreset RasParser::parseBytes(const std::vector<uint8_t>& data, const std::str
             m.env.sustain = roundN(doubles[2], 4);
             m.env.sustainDecay = doubles[3] > 0.001 ? roundN(rampValueToSeconds(doubles[3]), 5) : 0.0;
             m.env.release = roundN(rampValueToSeconds(doubles[4]), 5);
+            if (std::getenv("AS1_RAWENV"))
+                fprintf(stderr, "  RAWENV A=%.4f D=%.4f S=%.4f SD=%.4f R=%.4f  ->  Asec=%.4f Dsec=%.4f Rsec=%.4f\n",
+                        doubles[0], doubles[1], doubles[2], doubles[3], doubles[4],
+                        m.env.attack, m.env.decay, m.env.release);
             modulators.push_back(m);
 
             ModSource src;
@@ -469,22 +520,33 @@ RasPreset RasParser::parseBytes(const std::vector<uint8_t>& data, const std::str
     // APVTS envelopes.
     for (const auto& r : preset.routings)
     {
-        if (r.source < 8)
-            continue; // sources 0..4 (note/velocity/AT/controllers) not modelled yet
-        size_t si = static_cast<size_t>(r.source) - 8;
-        if (si >= preset.mod.sources.size())
-            continue;
-
-        int oscIndex = 0;
-        ModDest dest = decodeDest(static_cast<int>(r.destination), oscIndex);
+        int oscIndex = 0, filterIndex = 0, modIndex = 0;
+        ModDest dest = decodeDest(static_cast<int>(r.destination), oscIndex, filterIndex, modIndex);
         if (dest == ModDest::None || std::abs(r.amount) < 1.0e-6)
             continue;
 
         ModRouting mr;
-        mr.sourceIndex = static_cast<int>(si);
         mr.dest = dest;
         mr.oscIndex = oscIndex;
+        mr.filterIndex = filterIndex;
+        mr.modIndex = modIndex;
         mr.amount = r.amount;
+
+        if (r.source >= 8)
+        {
+            // Envelope / LFO source (file index 8+ = ModMatrix::sources[source-8]).
+            size_t si = static_cast<size_t>(r.source) - 8;
+            if (si >= preset.mod.sources.size())
+                continue;
+            mr.sourceIndex = static_cast<int>(si);
+        }
+        else
+        {
+            // Fixed performance source: 0 Note, 1 Velocity, 2 Mono AT, 3 Poly AT,
+            // 4..7 Controller A..D (A = mod wheel). These have no envelope/LFO
+            // slot; the voice supplies a runtime value per built-in source.
+            mr.builtinSource = static_cast<int>(r.source);
+        }
         preset.mod.routings.push_back(mr);
     }
 

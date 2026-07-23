@@ -19,32 +19,61 @@ enum class Waveform
     Unknown
 };
 
+// Full filter-type list from the Retro AS-1 Editor's dropdown; the list index
+// IS the `filt` byte-7 code (0..12). "SV" = state-variable (12 dB modes).
 enum class FilterType
 {
-    Lowpass2Pole,
-    Lowpass4Pole,
-    Bandpass4Pole,
-    Highpass4Pole,
+    Lowpass1Pole,   // 0  "1 Pole LP"
+    Lowpass2Pole,   // 1  "2 Pole LP"
+    Lowpass4Pole,   // 2  "4 Pole LP Resonant"
+    Highpass1Pole,  // 3  "1 Pole HP"
+    Highpass2Pole,  // 4  "2 Pole HP"
+    Highpass4Pole,  // 5  "4 Pole HP Resonant"
+    Allpass1Pole,   // 6  "1 Pole AP Resonant"
+    Allpass2Pole,   // 7  "2 Pole AP Resonant"
+    Allpass4Pole,   // 8  "4 Pole AP Resonant"
+    SVLowpass,      // 9  "State Variable LP"
+    SVBandpass,     // 10 "State Variable BP"
+    SVBandreject,   // 11 "State Variable BR"
+    SVHighpass,     // 12 "State Variable HP"
     Unknown
 };
 
+// Audio-rate source selector used by oscillator sync / FM and filter CM
+// (editor dropdown order): 0 None, 1..3 Oscillator 1..3, 4 Filter 1 in,
+// 5 Filter 1 out, 6 Filter 2 in, 7 Filter 2 out.
 struct OscillatorConfig
 {
     bool enabled = false;
+    bool keyTrack = true;    // osci byte 5: oscillator follows the keyboard
     Waveform waveform = Waveform::Saw;
+    int syncSource = 0;      // osci bytes 8-9 (AnalogAudioSource): hard sync master
+    int fmSource = 0;        // osci bytes 10-11 (AnalogAudioSource): linear FM source
     int coarseTune = 0;      // semitones
     double fineTune = 0.0;   // cents
     double symmetry = 50.0;  // 0..100 pulse duty (50 = square)
+    double fmAmount = 0.0;   // 0..1 FM depth (osci double @38)
     double volume = 1.0;     // 0..1 mix level
 };
 
+// One of the two filters. The five doubles follow the editor's knob order
+// (verified against RetroLib.dll's export table: getter RVA -> member offset):
+// Cutoff@14, Spread@22, CM Amt@30, Resonance@38, Overdrive@46. Bytes 10..12
+// select which oscillators feed this filter; byte 13 chains in the OTHER
+// filter's output (serial routing). Bytes 8-9 = CM (cutoff-modulation) audio
+// source.
 struct FilterConfig
 {
     bool enabled = false;
     FilterType type = FilterType::Lowpass4Pole;
-    double cutoff = 100.0;        // 0..100
-    double resonance = 0.0;       // 0..100
-    double polyModAmount = 0.0;   // 0..100
+    double cutoff = 1.0;          // 0..1 knob; Hz = 22050 * cutoff^1.5
+    double spread = 0.0;          // 0..1 separation of the two cascade stages
+    double cmAmount = 0.0;        // 0..1 audio-rate cutoff modulation depth
+    double resonance = 0.0;       // 0..1
+    double overdrive = 0.0;       // 0..1 post-filter drive
+    int cmSource = 0;             // AnalogAudioSource
+    bool inputOsc[3] = { false, false, false };
+    bool inputOtherFilter = false;
 };
 
 struct EnvelopeConfig

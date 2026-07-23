@@ -1,6 +1,11 @@
-# Builds Release VST3s for macOS (universal arm64 + x86_64) and Windows x64,
-# uploads them as artifacts on every push/PR, and attaches the zips to a
-# GitHub Release when a v* tag is pushed.
+# Builds Release Standalone apps + VST3s for macOS (universal arm64 + x86_64)
+# and Windows x64, with the RetroAS1 factory presets bundled INSIDE each build so
+# there is nothing separate for the user to copy. Uploads them as artifacts on
+# every push/PR and attaches the installers to a GitHub Release on a v* tag.
+#
+# macOS ships a drag-to-Applications DMG (Standalone .app + VST3), self-contained.
+# Windows ships a zip with the Standalone .exe, the VST3, and the presets already
+# sitting next to each binary.
 name: Build
 
 on:
@@ -12,7 +17,7 @@ on:
 
 jobs:
   macos:
-    name: macOS VST3 (universal)
+    name: macOS (Standalone + VST3, universal)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,37 +30,60 @@ jobs:
           -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15
 
       - name: Build
-        run: cmake --build build --target AS1Next_VST3 --parallel 3
+        run: cmake --build build --target AS1Next_All --parallel 3
 
-      # Without at least an ad-hoc signature, macOS refuses to load the
-      # binary at all on Apple Silicon.
-      - name: Ad-hoc codesign
-        run: codesign --force --deep -s - "build/AS1Next_artefacts/Release/VST3/AS-1 Next.vst3"
-
-      - name: Package
+      - name: Bundle presets + codesign
         run: |
-          mkdir -p dist
-          cp -R "build/AS1Next_artefacts/Release/VST3/AS-1 Next.vst3" dist/
-          cp -R RetroAS1 dist/RetroAS1
-          cat > dist/README.txt <<'EOF'
-          AS-1 Next — macOS VST3 (universal: Apple Silicon + Intel)
+          set -e
+          APP="build/AS1Next_artefacts/Release/Standalone/AS-1 Next.app"
+          VST3="build/AS1Next_artefacts/Release/VST3/AS-1 Next.vst3"
 
-          1. Copy "AS-1 Next.vst3" to ~/Library/Audio/Plug-Ins/VST3/
-          2. Copy the "RetroAS1" preset folder next to it
-             (~/Library/Audio/Plug-Ins/VST3/RetroAS1/)
-             or to ~/Documents/AS1Next/RetroAS1/
-          3. The build is unsigned (ad-hoc); if macOS quarantines it, run:
-             xattr -cr ~/Library/Audio/Plug-Ins/VST3/"AS-1 Next.vst3"
+          # Drop the factory bank inside each bundle's Resources so the plug-in
+          # finds it with zero user action (PresetManager looks there first).
+          mkdir -p "$APP/Contents/Resources/RetroAS1"
+          cp RetroAS1/*.ras "$APP/Contents/Resources/RetroAS1/"
+          mkdir -p "$VST3/Contents/Resources/RetroAS1"
+          cp RetroAS1/*.ras "$VST3/Contents/Resources/RetroAS1/"
+
+          # Sign AFTER adding resources (codesign seals the bundle). Ad-hoc: macOS
+          # refuses to load an unsigned binary at all on Apple Silicon.
+          codesign --force --deep -s - "$APP"
+          codesign --force --deep -s - "$VST3"
+
+      - name: Build DMG
+        run: |
+          set -e
+          STAGE="dmgroot"
+          rm -rf "$STAGE"; mkdir -p "$STAGE"
+          cp -R "build/AS1Next_artefacts/Release/Standalone/AS-1 Next.app" "$STAGE/"
+          cp -R "build/AS1Next_artefacts/Release/VST3/AS-1 Next.vst3" "$STAGE/"
+          ln -s /Applications "$STAGE/Applications"
+          cat > "$STAGE/READ ME — Install.txt" <<'EOF'
+          AS-1 Next — macOS
+
+          STANDALONE (easiest):
+            Drag "AS-1 Next.app" onto the Applications folder in this window. Done.
+            The factory presets are already inside the app — nothing else to copy.
+
+          VST3 (for a DAW):
+            Drag "AS-1 Next.vst3" to  ~/Library/Audio/Plug-Ins/VST3/
+
+          First launch: the app is signed ad-hoc (no paid Apple certificate), so
+          macOS may say it is from an unidentified developer. RIGHT-CLICK the app
+          and choose "Open" once — after that it opens normally. If it is still
+          blocked, open Terminal and run:
+            xattr -cr "/Applications/AS-1 Next.app"
           EOF
-          cd dist && zip -r "../AS-1-Next-macOS-VST3.zip" .
+          hdiutil create -volname "AS-1 Next" -srcfolder "$STAGE" \
+            -ov -format UDZO "AS-1-Next-macOS.dmg"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: AS-1-Next-macOS-VST3
-          path: AS-1-Next-macOS-VST3.zip
+          name: AS-1-Next-macOS
+          path: AS-1-Next-macOS.dmg
 
   windows:
-    name: Windows x64 VST3
+    name: Windows x64 (Standalone + VST3)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -68,29 +96,43 @@ jobs:
           -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
 
       - name: Build
-        run: cmake --build build --config Release --target AS1Next_VST3 --parallel 3
+        run: cmake --build build --config Release --target AS1Next_All --parallel 3
 
       - name: Package
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           New-Item -ItemType Directory dist | Out-Null
-          Copy-Item -Recurse "build/AS1Next_artefacts/Release/VST3/AS-1 Next.vst3" dist/
-          Copy-Item -Recurse RetroAS1 dist/RetroAS1
-          Set-Content dist/README.txt @"
-          AS-1 Next — Windows x64 VST3
 
-          1. Copy the "AS-1 Next.vst3" folder to C:\Program Files\Common Files\VST3\
-          2. Copy the "RetroAS1" preset folder next to it
-             (C:\Program Files\Common Files\VST3\RetroAS1\)
-             or to Documents\AS1Next\RetroAS1\ or %APPDATA%\AS1Next\RetroAS1\
+          # Standalone: exe + presets next to it (PresetManager walks up to find it).
+          New-Item -ItemType Directory "dist/AS-1 Next (Standalone)" | Out-Null
+          Copy-Item "build/AS1Next_artefacts/Release/Standalone/AS-1 Next.exe" "dist/AS-1 Next (Standalone)/"
+          Copy-Item -Recurse RetroAS1 "dist/AS-1 Next (Standalone)/RetroAS1"
+
+          # VST3: bundle presets inside Contents/Resources AND next to the bundle.
+          Copy-Item -Recurse "build/AS1Next_artefacts/Release/VST3/AS-1 Next.vst3" dist/
+          New-Item -ItemType Directory "dist/AS-1 Next.vst3/Contents/Resources/RetroAS1" | Out-Null
+          Copy-Item "RetroAS1/*.ras" "dist/AS-1 Next.vst3/Contents/Resources/RetroAS1/"
+
+          Set-Content "dist/READ ME - Install.txt" @"
+          AS-1 Next - Windows x64
+
+          STANDALONE (easiest):
+            Open the "AS-1 Next (Standalone)" folder and run "AS-1 Next.exe".
+            The presets are already in the RetroAS1 folder next to it.
+
+          VST3 (for a DAW):
+            Copy the "AS-1 Next.vst3" folder to  C:\Program Files\Common Files\VST3\
+            The presets are bundled inside it.
+
           No VC++ Redistributable needed (statically linked runtime).
           "@
-          Compress-Archive -Path dist/* -DestinationPath AS-1-Next-win64-VST3.zip
+          Compress-Archive -Path dist/* -DestinationPath AS-1-Next-win64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: AS-1-Next-win64-VST3
-          path: AS-1-Next-win64-VST3.zip
+          name: AS-1-Next-win64
+          path: AS-1-Next-win64.zip
 
   release:
     name: GitHub Release
@@ -107,6 +149,6 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: |
-            AS-1-Next-macOS-VST3.zip
-            AS-1-Next-win64-VST3.zip
+            AS-1-Next-macOS.dmg
+            AS-1-Next-win64.zip
           generate_release_notes: true

@@ -1,0 +1,21 @@
+# ninja log v7
+1	17	1784816987950357775	juce-populate-prefix/src/juce-populate-stamp/juce-populate-mkdir	46792cc28805d0b2
+1	17	1784816987950357775	/home/monsler/Документы/AS-1 Next/build-release/_deps/juce-subbuild/juce-populate-prefix/src/juce-populate-stamp/juce-populate-mkdir	46792cc28805d0b2
+17	76342	1784817064274836125	juce-populate-prefix/src/juce-populate-stamp/juce-populate-download	8dcc57fb52f716f4
+17	76342	1784817064274836125	/home/monsler/Документы/AS-1 Next/build-release/_deps/juce-subbuild/juce-populate-prefix/src/juce-populate-stamp/juce-populate-download	8dcc57fb52f716f4
+76342	76357	1784817064275836131	juce-populate-prefix/src/juce-populate-stamp/juce-populate-update	58848a46bfaa1b41
+76342	76357	1784817064275836131	/home/monsler/Документы/AS-1 Next/build-release/_deps/juce-subbuild/juce-populate-prefix/src/juce-populate-stamp/juce-populate-update	58848a46bfaa1b41
+76357	76372	1784817064305836319	juce-populate-prefix/src/juce-populate-stamp/juce-populate-patch	66fe590196b73ebd
+76357	76372	1784817064305836319	/home/monsler/Документы/AS-1 Next/build-release/_deps/juce-subbuild/juce-populate-prefix/src/juce-populate-stamp/juce-populate-patch	66fe590196b73ebd
+76372	76388	1784817064320836413	juce-populate-prefix/src/juce-populate-stamp/juce-populate-configure	d3ca64e96f4e8330
+76372	76388	1784817064320836413	/home/monsler/Документы/AS-1 Next/build-release/_deps/juce-subbuild/juce-populate-prefix/src/juce-populate-stamp/juce-populate-configure	d3ca64e96f4e8330
+76388	76405	1784817064337836520	juce-populate-prefix/src/juce-populate-stamp/juce-populate-build	77b96da828fed0b3
+76388	76405	1784817064337836520	/home/monsler/Документы/AS-1 Next/build-release/_deps/juce-subbuild/juce-populate-prefix/src/juce-populate-stamp/juce-populate-build	77b96da828fed0b3
+76405	76420	1784817064353836620	juce-populate-prefix/src/juce-populate-stamp/juce-populate-install	1a508085ab29b1f0
+76405	76420	1784817064353836620	/home/monsler/Документы/AS-1 Next/build-release/_deps/juce-subbuild/juce-populate-prefix/src/juce-populate-stamp/juce-populate-install	1a508085ab29b1f0
+76420	76436	1784817064368836714	juce-populate-prefix/src/juce-populate-stamp/juce-populate-test	3c7e78301cbb9834
+76420	76436	1784817064368836714	/home/monsler/Документы/AS-1 Next/build-release/_deps/juce-subbuild/juce-populate-prefix/src/juce-populate-stamp/juce-populate-test	3c7e78301cbb9834
+76436	76458	1784817064390836852	CMakeFiles/juce-populate-complete	951416a5f8efd6c9
+76436	76458	1784817064390836852	juce-populate-prefix/src/juce-populate-stamp/juce-populate-done	951416a5f8efd6c9
+76436	76458	1784817064390836852	/home/monsler/Документы/AS-1 Next/build-release/_deps/juce-subbuild/CMakeFiles/juce-populate-complete	951416a5f8efd6c9
+76436	76458	1784817064390836852	/home/monsler/Документы/AS-1 Next/build-release/_deps/juce-subbuild/juce-populate-prefix/src/juce-populate-stamp/juce-populate-done	951416a5f8efd6c9

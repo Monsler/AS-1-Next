@@ -131,7 +131,11 @@ ModMatrixEditor::ModMatrixEditor(AS1AudioProcessor& p) : processor(p)
             return;
         if (edited.mod.sources.empty())
             edited.mod.sources.push_back(makeDefaultEnvelope());
-        edited.mod.routings.push_back({ 0, ModDest::FilterCutoff, 0, 0.5 });
+        ModRouting nr;
+        nr.sourceIndex = 0;
+        nr.dest = ModDest::FilterCutoff;
+        nr.amount = 0.5;
+        edited.mod.routings.push_back(nr);
         publish();
         rebuildAll();
         routingList.selectRow((int) edited.mod.routings.size() - 1);
