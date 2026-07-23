@@ -1,0 +1,112 @@
+cmake_minimum_required(VERSION 3.22)
+
+project(AS1Next VERSION 0.1.0 LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 26)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+include(FetchContent)
+FetchContent_Declare(
+    JUCE
+    GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
+    GIT_TAG        8.0.15
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(JUCE)
+
+juce_add_binary_data(AS1NextAssets
+    SOURCES
+        icons/logo_trimmed.png
+        icons/background_processed.png
+        icons/onoff.png
+        icons/search.png
+        icons/arrow.png
+        icons/favorite-on.png
+        icons/favorite-off.png
+        icons/Nunito-Regular.ttf
+)
+set_target_properties(AS1NextAssets PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+juce_add_plugin(AS1Next
+    PRODUCT_NAME            "AS-1 Next"
+    COMPANY_NAME             "monsler"
+    PLUGIN_MANUFACTURER_CODE Msnr
+    PLUGIN_CODE              As1n
+    FORMATS                  VST3 Standalone
+    VST3_CATEGORIES           Instrument Synth
+    IS_SYNTH                 TRUE
+    NEEDS_MIDI_INPUT          TRUE
+    NEEDS_MIDI_OUTPUT         FALSE
+    IS_MIDI_EFFECT            FALSE
+    EDITOR_WANTS_KEYBOARD_FOCUS TRUE
+    COPY_PLUGIN_AFTER_BUILD  FALSE
+)
+
+target_sources(AS1Next PRIVATE
+    Source/PluginProcessor.cpp
+    Source/PluginEditor.cpp
+    Source/presets/RasParser.cpp
+    Source/presets/PresetManager.cpp
+    Source/dsp/SynthVoice.cpp
+    Source/gui/AS1LookAndFeel.cpp
+    Source/gui/BackgroundArt.cpp
+    Source/gui/PresetBrowser.cpp
+    Source/gui/ModMatrixEditor.cpp
+)
+
+target_include_directories(AS1Next PRIVATE
+    Source
+)
+
+target_compile_definitions(AS1Next PUBLIC
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+    JUCE_VST3_CAN_REPLACE_VST2=0
+    JUCE_DISPLAY_SPLASH_SCREEN=0
+    AS1_PRESET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/RetroAS1"
+)
+
+target_link_libraries(AS1Next PRIVATE
+    AS1NextAssets
+    juce::juce_audio_utils
+    juce::juce_dsp
+    juce::juce_audio_processors
+    juce::juce_gui_basics
+    juce::juce_recommended_config_flags
+    juce::juce_recommended_lto_flags
+    juce::juce_recommended_warning_flags
+)
+
+# Headless GUI snapshot tool (Tools/SnapshotMain.cpp): renders the editor
+# offscreen and writes PNGs of every tab, for checking layout without a DAW.
+juce_add_gui_app(AS1Snapshot PRODUCT_NAME "AS1Snapshot")
+target_sources(AS1Snapshot PRIVATE
+    Tools/SnapshotMain.cpp
+    Source/PluginProcessor.cpp
+    Source/PluginEditor.cpp
+    Source/presets/RasParser.cpp
+    Source/presets/PresetManager.cpp
+    Source/dsp/SynthVoice.cpp
+    Source/gui/AS1LookAndFeel.cpp
+    Source/gui/BackgroundArt.cpp
+    Source/gui/PresetBrowser.cpp
+    Source/gui/ModMatrixEditor.cpp
+)
+target_include_directories(AS1Snapshot PRIVATE Source)
+target_compile_definitions(AS1Snapshot PRIVATE
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+    JUCE_DISPLAY_SPLASH_SCREEN=0
+    JUCE_MODAL_LOOPS_PERMITTED=1
+    JucePlugin_Name="AS-1 Next"
+    AS1_PRESET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/RetroAS1"
+)
+target_link_libraries(AS1Snapshot PRIVATE
+    AS1NextAssets
+    juce::juce_audio_utils
+    juce::juce_dsp
+    juce::juce_audio_processors
+    juce::juce_gui_basics
+    juce::juce_recommended_config_flags
+)
